@@ -1,7 +1,7 @@
 resource "google_secret_manager_secret" "main" {
   for_each = { for s in var.secrets : s.secret_id => s }
 
-  project   = var.project_id
+  project   = var.project.project_id
   secret_id = each.value.secret_id
 
   replication {
@@ -18,19 +18,14 @@ resource "google_secret_manager_secret_version" "main" {
 }
 
 locals {
+  # Flatten the list of members and roles across all secrets
   transformed_secret_accessors = flatten([
     for secret in var.secrets : [
-      for role, members in secret.accessors : [
-        for member_config in members : {
+      for member in secret.members : [
+        for role in member.roles : {
           secret_id = secret.secret_id
+          member    = member.member
           role      = role
-          member = (
-            member_config.transform_member && member_config.member_type == "serviceAgent" ?
-            "serviceAccount:service-${coalesce(member_config.project_number, var.project_number)}@gcp-sa-${member_config.member}.iam.gserviceaccount.com" :
-            member_config.transform_member && member_config.member_type == "serviceAccount" ?
-            "serviceAccount:${member_config.member}@${coalesce(member_config.project_id, var.project_id)}.iam.gserviceaccount.com" :
-            "${member_config.member_type}:${member_config.member}"
-          )
         }
       ]
     ]
@@ -38,10 +33,9 @@ locals {
 }
 
 resource "google_secret_manager_secret_iam_member" "access_secret" {
-  for_each = { for accessor in local.transformed_secret_accessors : "${accessor.secret_id}:${accessor.member}" => accessor }
+  for_each = { for member_role in local.transformed_secret_accessors : "${member_role.secret_id}:${member_role.member}:${member_role.role}" => member_role }
 
   secret_id = google_secret_manager_secret.main[each.value.secret_id].id
   role      = each.value.role
   member    = each.value.member
 }
-
