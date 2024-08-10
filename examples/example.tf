@@ -1,34 +1,19 @@
-terraform {
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = ">= 5.40.0"
-    }
-    google-beta = {
-      source  = "hashicorp/google-beta"
-      version = ">= 5.40.0"
-    }
-  }
-}
-
-module "secrets" {
+module "secret_manager" {
   source = "./.."
 
   project = {
     project_id = "your-project-id"
     project_services = {
-      "secretmanager.googleapis.com" = {
-        "disable_on_destroy" = false
-      }
+      "secretmanager.googleapis.com" = {}
     }
   }
 
   secrets = [{
-    secret_id   = "xxx"
-    secret_data = "yyy"
+    secret_id   = "your-secret-id"
+    secret_data = "your-secret-data"
     members = [
       {
-        id     = "scan-sa"
+        id     = "your-member-id"
         member = "user:user@example.com"
         roles = [
           "roles/owner"
@@ -36,9 +21,4 @@ module "secrets" {
       }
     ]
   }]
-}
-
-output "secrets" {
-  description = "The IAM members and their roles"
-  value       = module.secrets.secrets
 }
