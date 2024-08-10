@@ -1,3 +1,13 @@
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 5.40.0"
+    }
+  }
+}
+
+# Create the secrets in Google Secret Manager
 resource "google_secret_manager_secret" "main" {
   for_each = { for s in var.secrets : s.secret_id => s }
 
@@ -9,19 +19,21 @@ resource "google_secret_manager_secret" "main" {
   }
 }
 
+# Create secret versions for each secret
 resource "google_secret_manager_secret_version" "main" {
   for_each    = { for s in var.secrets : s.secret_id => s }
   secret      = google_secret_manager_secret.main[each.key].id
   secret_data = each.value.secret_data
 
+  # Terraform usually handles dependencies automatically, but this ensures the secret is created first.
   depends_on = [google_secret_manager_secret.main]
 }
 
+# Local variable to flatten IAM members across all secrets
 locals {
-  # Flatten the list of members and roles across all secrets
-  transformed_secret_accessors = flatten([
+  transformed_iam_members = flatten([
     for secret in var.secrets : [
-      for member in secret.members : [
+      for member in secret.iam_members : [
         for role in member.roles : {
           secret_id = secret.secret_id
           member    = member.member
@@ -32,8 +44,9 @@ locals {
   ])
 }
 
+# Assign IAM roles to the secrets based on the flattened IAM members list
 resource "google_secret_manager_secret_iam_member" "access_secret" {
-  for_each = { for member_role in local.transformed_secret_accessors : "${member_role.secret_id}:${member_role.member}:${member_role.role}" => member_role }
+  for_each = { for member_role in local.transformed_iam_members : "${member_role.secret_id}:${member_role.member}:${member_role.role}" => member_role }
 
   secret_id = google_secret_manager_secret.main[each.value.secret_id].id
   role      = each.value.role
