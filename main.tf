@@ -4,6 +4,10 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 5.40.0"
     }
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = ">= 5.40.0"
+    }
   }
 }
 
@@ -36,6 +40,7 @@ locals {
       for member in secret.iam_members : [
         for role in member.roles : {
           secret_id = secret.secret_id
+          email          = split(":", member.member)[1]
           member    = member.member
           role      = role
         }
